@@ -2,13 +2,37 @@ import numpy as np
 import argparse
 import matplotlib.pyplot as plt
 import cv2
+import tensorflow
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Flatten
 from tensorflow.keras.layers import Conv2D
-from tensorflow.keras.optimizers import Adam
+from keras.optimizers import Adam
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import os
+import RPi.GPIO as GPIO
+import time
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+def lightson(number):
+    print(number, "number")
+    gpio_num = 0
+    if number == 0 or number == 2:
+        gpio_num = 21
+    elif number == 1 or number == 4:
+        gpio_num = 20
+    elif number == 5:
+        gpio_num = 19
+    elif number == 3 or number == 6:
+        gpio_num = 18
+    print(gpio_num)
+    GPIO.setup(gpio_num,GPIO.OUT)
+    GPIO.output(gpio_num,GPIO.HIGH)
+    time.sleep(1)
+    return gpio_num
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # command line argument
@@ -110,6 +134,7 @@ elif mode == "display":
 
     # start the webcam feed
     cap = cv2.VideoCapture(0)
+    iterations = 0
     while True:
         # Find haar cascade to draw bounding box around face
         ret, frame = cap.read()
@@ -118,14 +143,21 @@ elif mode == "display":
         facecasc = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = facecasc.detectMultiScale(gray,scaleFactor=1.3, minNeighbors=5)
-
+    
         for (x, y, w, h) in faces:
+            print(iterations)
             cv2.rectangle(frame, (x, y-50), (x+w, y+h+10), (255, 0, 0), 2)
             roi_gray = gray[y:y + h, x:x + w]
             cropped_img = np.expand_dims(np.expand_dims(cv2.resize(roi_gray, (48, 48)), -1), 0)
             prediction = model.predict(cropped_img)
             maxindex = int(np.argmax(prediction))
+            if iterations%5==0:
+                print(iterations)
+                lightsoff = lightson(maxindex)
+                GPIO.output(lightsoff,GPIO.LOW)
             cv2.putText(frame, emotion_dict[maxindex], (x+20, y-60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+            iterations += 1
 
         cv2.imshow('Video', cv2.resize(frame,(1600,960),interpolation = cv2.INTER_CUBIC))
         if cv2.waitKey(1) & 0xFF == ord('q'):
